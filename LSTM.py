@@ -5,17 +5,20 @@ Created on Wed Sep 22 16:39:41 2021
 @author: user
 """
 
-print("測試")
+print("實驗開始")
+
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import datetime
 
 from FinMind.data import DataLoader
 dl = DataLoader()
 # 下載台股股價資料
 data = dl.taiwan_stock_daily(
-    stock_id='2330', start_date='2018-01-01'
+    stock_id='0050', start_date='2018-01-01'
 )
 
 data.head()
@@ -30,97 +33,7 @@ import FinMind
 from FinMind import plotting
 from FinMind.data import DataLoader
 
-
-def get_path():
-     path = Path(FinMind.__file__)
-     path = path.parent.joinpath("templates")
-     return path
-
-
-PATH = get_path()
-
-
-def kline(data_loader: DataLoader, stock_id: str, start_date: str, end_date: str):
-     stock_data = data_loader.taiwan_stock_daily(stock_id, start_date, end_date)
-     stock_data = data_loader.feature.add_kline_institutional_investors(
-          stock_data
-     )
-     stock_data = data_loader.feature.add_kline_margin_purchase_short_sale(
-          stock_data
-     )
-     # 繪製k線圖
-     kline_plot = plotting.kline(stock_data)
-     return kline_plot
- 
-def bar(data_loader: DataLoader, stock_id: str, start_date: str, end_date: str):
-     df = data_loader.taiwan_stock_month_revenue(
-          stock_id=stock_id, start_date=start_date, end_date=end_date
-     )
-     df["labels"] = (
-          df[["revenue_year", "revenue_month"]]
-          .astype(str)
-          .apply(lambda date: f"{date[0]}-{date[1]}M", axis=1)
-     )
-     df["series"] = df["revenue"].map(lambda value: round(value * 1e-8, 2))
-     bar_plot = plotting.bar(
-          labels=df["labels"],
-          series=df["series"],
-          title="月營收",
-          yaxis_color="orange",
-          y_axis_name="億",
-     )
-     return bar_plot
-    
-def line(data_loader: DataLoader, stock_id: str, start_date: str, end_date: str):
-     df = data_loader.taiwan_stock_shareholding(
-          stock_id=stock_id, start_date=start_date, end_date=end_date
-     )
-     df["series"] = df["ForeignInvestmentSharesRatio"].map(
-          lambda value: round(value * 1e-2, 2)
-     )
-     df["labels"] = df["date"]
-     line_plot = plotting.line(
-          labels=df["labels"],
-          series=df["series"],
-          title="外資持股比例",
-          yaxis_color="blue",
-          y_axis_name="",
-     )
-     return line_plot
- 
-
-def pie(data_loader: DataLoader, stock_id: str, start_date: str, end_date: str):
-     df = data_loader.taiwan_stock_holding_shares_per(
-          stock_id=stock_id, start_date=start_date, end_date=end_date
-     )
-     df = df[df["date"] == max(df["date"])]
-     df = df[df["HoldingSharesLevel"] != "total"]
-     df["labels"] = df["HoldingSharesLevel"]
-     df["series"] = df["percent"]
-     pie_plot = plotting.pie(
-          labels=df["labels"], series=df["series"], title="股權分散表"
-     )
-     return pie_plot
- 
-
-def dashboard(stock_id: str, start_date: str, end_date: str):
-     data_loader = DataLoader()
-     page = Page(layout=Page.SimplePageLayout)
-     page.add(
-          kline(data_loader, stock_id, start_date, end_date),
-          bar(data_loader, stock_id, start_date, end_date),
-          line(data_loader, stock_id, start_date, end_date),
-          pie(data_loader, stock_id, start_date, end_date),
-     )
-     dashboard_html_path = str(PATH.joinpath("dashboard.html"))
-     post_html_path = str(PATH.joinpath("post.html"))
-     page.render(dashboard_html_path)
-     post_html = open(post_html_path, "r", encoding="utf-8").read()
-     dashboard_html = open(dashboard_html_path, "r", encoding="utf-8").read()
-     html = post_html.replace("DASHBOARD", dashboard_html)
-     with open(dashboard_html_path, "w", encoding="utf-8") as e:
-          e.write(html)
-         
+     
 #切分Test集
 test = data[data.date>'2019-09-01']
 train = data[:len(data)-len(test)]
@@ -153,24 +66,37 @@ import keras
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
-from keras.layers import Dropout,BatchNormalization        
+from keras.layers import Dropout,BatchNormalization  
+from keras import optimizers
+from keras.layers import Activation, Dense      
+
 
 keras.backend.clear_session()
 regressor = Sequential()
-regressor.add(LSTM(units = 100, input_shape = (X_train.shape[1], 1)))
+regressor.add(LSTM(units = 200, input_shape = (X_train.shape[1], 1)))
+
+#加入激活函數
+#regressor.add(Activation('tanh'))
+regressor.add(Activation('softsign'))
 regressor.add(Dense(units = 1))
-regressor.compile(optimizer = 'adam', loss = 'mean_squared_error')
+regressor.compile(optimizer = 'adam', loss = 'mean_squared_error' ,metrics=['accuracy'])
 
 regressor.summary()
 
-history = regressor.fit(X_train, y_train, epochs = 100, batch_size = 16)
+
+
+history = regressor.fit(X_train, y_train, epochs = 1000, batch_size = 16)
+
+
+plt.subplot(1, 2, 1) #讓圖表同時排列方便瀏覽
 plt.title('train_loss')
 plt.ylabel('loss')
 plt.xlabel('Epoch')
 plt.plot( history.history["loss"])
 
 
-dataset_total = pd.concat((train['open'], test['open']), axis = 0)
+
+dataset_total = pd.concat((train['close'], test['close']), axis = 0)
 inputs = dataset_total[len(dataset_total) - len(test) - 10:].values
 inputs = inputs.reshape(-1,1)
 inputs = sc.transform(inputs)
@@ -179,16 +105,25 @@ for i in range(10, len(inputs)):
     X_test.append(inputs[i-10:i-1, 0])
 X_test = np.array(X_test)
 X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+
+
 predicted_stock_price = regressor.predict(X_test)
 #使用sc的 inverse_transform將股價轉為歸一化前
 predicted_stock_price = sc.inverse_transform(predicted_stock_price)
 
-
+plt.subplot(1, 2, 2) 
 plt.plot(test['open'].values, color = 'black', label = 'Real TSMC Stock Price')
 plt.plot(predicted_stock_price, color = 'green', label = 'Predicted TSMC Stock Price')
 plt.title('TATA Stock Price Prediction')
 plt.xlabel('Time')
 plt.ylabel('Stock Price')
 plt.legend()
+
+
+plt.savefig('C:/Users/user/OneDrive - 國立宜蘭大學/文件/ESSAY/exresult/1000epoch-softsignadamstockresult-0050 .png')
 plt.show()
-# plt.savefig('lstm_2330.png')
+plt.close()
+print("實驗結束")
+
+
+# plt.savefig('lstm_2330.png') 
