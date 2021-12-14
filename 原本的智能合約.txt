@@ -1,0 +1,34 @@
+pragma solidity ^0.4.18;
+
+contract  loginIn{
+    
+   string public LoginEmail;
+   string public LoginPassword;
+   string public SignEmail;
+   string public SignPassword;
+   
+ 
+   
+   //使用者註冊
+   
+   
+   function SignUserInfo(string _SignEmail, uint SignPassword) public {
+       SignEmail = _SignEmail;
+       SignPassword = _SignPassword;
+      
+   }
+   
+   
+   // 確認使用者是否真的有在區塊鍊裡
+   
+   function GetUserInfo() extern pure returns (string) {
+       
+       if (LoginEmail == SignEmail || LoginPassword == SignPassword) {
+           
+           return (SignEmail, SignPassword);
+       }
+       
+
+   }
+    
+}
